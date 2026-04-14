@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Database
+*.db
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Binary tools
+toolbox
+
+# Environment
+.env
+*.env
+
+# ADK
+.adk/

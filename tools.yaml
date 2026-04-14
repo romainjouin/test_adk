@@ -1,0 +1,149 @@
+kind: source
+name: shop-db
+type: sqlite
+database: "./shop.db"
+---
+kind: tool
+name: search-products-by-category
+type: sqlite-sql
+source: shop-db
+description: "Searches all products in a given category. Case and accent insensitive (ecran = Écran, peripherique = Périphérique). Categories: Audio, Périphérique, Vidéo, Accessoire, Écran, Stockage."
+parameters:
+  - name: category
+    type: string
+    description: "The product category to search for (e.g. ecran, audio, accessoire — accents are optional)"
+statement: >-
+  WITH kw AS (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+    LOWER(?),
+    'é','e'), 'è','e'), 'ê','e'), 'ë','e'),
+    'à','a'), 'â','a'),
+    'ù','u'), 'û','u'),
+    'ô','o'), 'î','i'), 'ï','i'), 'ç','c'),
+    'É','e'), 'Ê','e') AS k)
+  SELECT p.* FROM products p, kw
+  WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+    LOWER(p.category),
+    'é','e'), 'è','e'), 'ê','e'), 'ë','e'),
+    'à','a'), 'â','a'),
+    'ù','u'), 'û','u'),
+    'ô','o'), 'î','i'), 'ï','i'), 'ç','c'),
+    'É','e'), 'Ê','e') = kw.k
+---
+kind: tool
+name: search-products-by-name
+type: sqlite-sql
+source: shop-db
+description: "Searches products whose name OR category contains a keyword. Case and accent insensitive (ecran finds Écran, cable finds Câble). Useful for any product search."
+parameters:
+  - name: keyword
+    type: string
+    description: "The keyword to search for (accents are optional, e.g. ecran, cable, peripherique)"
+statement: >-
+  WITH kw AS (SELECT REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+    LOWER(?),
+    'é','e'), 'è','e'), 'ê','e'), 'ë','e'),
+    'à','a'), 'â','a'),
+    'ù','u'), 'û','u'),
+    'ô','o'), 'î','i'), 'ï','i'), 'ç','c'),
+    'É','e'), 'Ê','e') AS k)
+  SELECT p.* FROM products p, kw
+  WHERE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+    LOWER(p.name),
+    'é','e'), 'è','e'), 'ê','e'), 'ë','e'),
+    'à','a'), 'â','a'),
+    'ù','u'), 'û','u'),
+    'ô','o'), 'î','i'), 'ï','i'), 'ç','c'),
+    'É','e'), 'Ê','e') LIKE '%' || kw.k || '%'
+  OR REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+    LOWER(p.category),
+    'é','e'), 'è','e'), 'ê','e'), 'ë','e'),
+    'à','a'), 'â','a'),
+    'ù','u'), 'û','u'),
+    'ô','o'), 'î','i'), 'ï','i'), 'ç','c'),
+    'É','e'), 'Ê','e') LIKE '%' || kw.k || '%'
+---
+kind: tool
+name: get-top-products
+type: sqlite-sql
+source: shop-db
+description: "Returns the top-rated products (top N). Useful when asking for the best or most popular products."
+parameters:
+  - name: limit
+    type: integer
+    description: "Number of products to return (e.g. 5 for the top 5)"
+statement: SELECT * FROM products ORDER BY rating DESC LIMIT ?
+---
+kind: tool
+name: get-sales-by-product
+type: sqlite-sql
+source: shop-db
+description: "Returns a sales summary for each product including order count, total quantity sold, revenue, and total profit. Useful for analyzing sales performance."
+parameters: []
+statement: >-
+  SELECT p.name, p.category, p.price, p.cost,
+         ROUND(p.price - p.cost, 2) as unit_margin,
+         ROUND((p.price - p.cost) / p.price * 100, 1) as margin_pct,
+         COUNT(o.id) as order_count,
+         SUM(o.quantity) as quantity_sold,
+         ROUND(SUM(o.total_price), 2) as revenue,
+         ROUND(SUM(o.quantity) * (p.price - p.cost), 2) as total_profit
+  FROM products p
+  LEFT JOIN orders o ON p.id = o.product_id
+  GROUP BY p.id
+  ORDER BY total_profit DESC
+---
+kind: tool
+name: get-recent-orders
+type: sqlite-sql
+source: shop-db
+description: "Returns the N most recent orders with product name, customer, quantity, amount, and status."
+parameters:
+  - name: limit
+    type: integer
+    description: "Number of recent orders to return"
+statement: >-
+  SELECT o.id, p.name as product, o.customer,
+         o.quantity, o.total_price as amount,
+         o.order_date as date, o.status
+  FROM orders o
+  JOIN products p ON o.product_id = p.id
+  ORDER BY o.order_date DESC
+  LIMIT ?
+---
+kind: tool
+name: get-low-stock-products
+type: sqlite-sql
+source: shop-db
+description: "Returns products with stock at or below a given threshold. Useful for identifying products that need restocking."
+parameters:
+  - name: threshold
+    type: integer
+    description: "The stock threshold below which to alert"
+statement: SELECT * FROM products WHERE stock <= ? ORDER BY stock ASC
+---
+kind: tool
+name: get-margin-analysis
+type: sqlite-sql
+source: shop-db
+description: "Profitability analysis by product. Returns selling price, cost, unit margin in euros and percentage, and stock value at cost. Useful for questions about margin, profitability, most or least profitable products."
+parameters: []
+statement: >-
+  SELECT name, category, price as selling_price, cost,
+         ROUND(price - cost, 2) as unit_margin,
+         ROUND((price - cost) / price * 100, 1) as margin_pct,
+         stock,
+         ROUND(stock * cost, 2) as stock_value_at_cost,
+         ROUND(stock * (price - cost), 2) as potential_stock_profit
+  FROM products
+  ORDER BY margin_pct DESC
+---
+kind: toolset
+name: shop-toolset
+tools:
+  - search-products-by-category
+  - search-products-by-name
+  - get-top-products
+  - get-sales-by-product
+  - get-recent-orders
+  - get-low-stock-products
+  - get-margin-analysis

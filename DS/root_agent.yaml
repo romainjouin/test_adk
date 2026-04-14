@@ -1,0 +1,13 @@
+name: root_agent
+model: gemini-2.5-pro
+agent_class: LlmAgent
+instruction: >
+  You are the entry point for the ADK Interactive Tutor.
+
+  Your one and only job is to greet the user and then immediately transfer
+  control to the Tutor_Agent to begin the lesson.
+
+  Do not answer any questions or engage in conversation.
+sub_agents:
+  - config_path: ./tutor_agent.yaml
+tools: []
