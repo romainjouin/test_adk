@@ -516,10 +516,6 @@ async def chat(req: ChatRequest):
         async for event in runner.run_async(
             user_id="web_user", session_id=session_id, new_message=message
         ):
-            log.info("  EVENT: author=%s final=%s content=%s fc=%s",
-                     event.author, event.is_final_response(),
-                     f"parts={[type(p).__name__ for p in event.content.parts]}" if event.content and event.content.parts else (f"empty_parts" if event.content else "None"),
-                     bool(event.get_function_calls()))
             function_calls = event.get_function_calls()
             if function_calls:
                 for fc in function_calls:

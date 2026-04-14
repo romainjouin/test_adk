@@ -35,12 +35,12 @@ Architecture:
 import io
 import os
 import re
-import sys
 import traceback
 from contextlib import redirect_stdout, redirect_stderr
 
 from google.adk.agents import Agent
-from db_context import PRODUCTS_LIST, STATS_SUMMARY, TODAY
+from google.genai import types as genai_types
+from db_context import TODAY
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DB_PATH = os.path.join(_BASE_DIR, "shop.db")
@@ -51,21 +51,14 @@ _GLOBALS: dict = {}
 
 
 def execute_python(code: str) -> dict:
-    """Execute arbitrary Python code and return stdout, stderr, and any chart paths.
-
-    The code runs in the local Python environment with access to all installed
-    packages (pandas, numpy, sklearn, matplotlib, sqlite3, etc.) and to the
-    e-commerce database at shop.db.
-
-    State is preserved between calls within the same conversation: variables,
-    imports, and DataFrames defined in one call are available in the next.
+    """Execute Python code locally. Has access to pandas, numpy, sklearn,
+    matplotlib, sqlite3 and the shop.db database. State persists between calls.
 
     Args:
-        code: The Python code to execute. Must use print() for output.
+        code: Python code to run. Use print() for output.
 
     Returns:
-        A dict with stdout, stderr (if any), and chart_urls (if any charts
-        were saved with the CHART_SAVED: marker).
+        dict with stdout, stderr, status, and chart_urls.
     """
     stdout_buf = io.StringIO()
     stderr_buf = io.StringIO()
@@ -98,6 +91,30 @@ def execute_python(code: str) -> dict:
     return result
 
 
+_INSTRUCTION = (
+    "You are an expert data scientist. You analyze data by writing Python code "
+    "and executing it with execute_python. You MUST call execute_python for every "
+    "computation — never guess or calculate mentally.\n\n"
+    "DATABASE: SQLite at " + _DB_PATH + "\n"
+    "Tables: products(id,name,category,price,cost,stock,rating), "
+    "customers(id,name,city,signup_date), "
+    "orders(id,product_id,quantity,total_price,customer,order_date,status)\n"
+    "Statuses: livree=delivered, en cours=pending, annulee=cancelled. "
+    "Dates: YYYY-MM-DD HH:MM. Today: " + TODAY + "\n\n"
+    "PACKAGES: pandas, numpy, matplotlib, sklearn, sqlite3\n\n"
+    "CHARTS: Save to " + _CHARTS_DIR + " using matplotlib. "
+    "After plt.savefig, always print CHART_SAVED: followed by the file path.\n\n"
+    "RULES:\n"
+    "- Always print() results\n"
+    "- State persists between execute_python calls\n"
+    "- If code fails, read the error, fix it, retry\n"
+    "- Show key metrics for ML models\n"
+    "- Interpret results in plain English\n"
+    "- Suggest follow-up questions\n"
+    "- Respond in English"
+)
+
+
 code_agent = Agent(
     name="code_interpreter",
     model="gemini-2.5-flash",
@@ -105,76 +122,10 @@ code_agent = Agent(
         "A code interpreter agent that writes and executes Python code "
         "to analyze data, build ML models, and generate charts."
     ),
-    instruction=f"""You are an expert Python data scientist. You write and execute
-Python code to analyze data, build machine learning models, and create
-visualizations.
-
-## How you work
-1. Call execute_python with your Python code
-2. Read the stdout/stderr output
-3. Call execute_python again if needed (state is preserved between calls)
-4. If your code fails, read the error, fix it, and try again
-5. When done, interpret the results in plain English
-
-## Database access
-
-The e-commerce SQLite database is at:
-  DB_PATH = "{_DB_PATH}"
-
-Typical pattern:
-  import sqlite3
-  import pandas as pd
-  conn = sqlite3.connect("{_DB_PATH}")
-  df = pd.read_sql("SELECT ...", conn)
-  conn.close()
-  print(df)
-
-### Schema
-  products(id, name, category, price, cost, stock, rating)
-  customers(id, name, city, signup_date)
-  orders(id, product_id, quantity, total_price, customer, order_date, status)
-
-- Order statuses: livrée (delivered), en cours (pending), annulée (cancelled)
-- Date format: YYYY-MM-DD HH:MM
-- Today: {TODAY}
-
-### Reference data
-{STATS_SUMMARY}
-
-### Product catalog
-{PRODUCTS_LIST}
-
-## Available Python packages
-- pandas, numpy, matplotlib, sklearn (scikit-learn), sqlite3, json, csv, datetime
-
-## Saving charts
-
-Save matplotlib charts to: {_CHARTS_DIR}
-
-Pattern:
-  import matplotlib.pyplot as plt
-  import time, os
-  fig, ax = plt.subplots(figsize=(10, 6))
-  # ... plot ...
-  filepath = os.path.join("{_CHARTS_DIR}", "chart_" + str(int(time.time())) + ".png")
-  fig.savefig(filepath, dpi=120, bbox_inches="tight")
-  plt.close(fig)
-  print("CHART_SAVED:" + filepath)
-
-CRITICAL: Always print("CHART_SAVED:" + filepath) after saving a chart.
-
-## Your rules
-- ALWAYS respond in English
-- ALWAYS use execute_python to run code — never guess results
-- ALWAYS print() results (stdout is your only feedback channel)
-- ALWAYS use the exact DB_PATH above (absolute path)
-- ALWAYS save charts to the CHARTS_DIR path above
-- State persists: variables from one execute_python call are available in the next
-- When doing ML: explain your approach, show metrics, interpret results
-- If code fails: read the error, fix it, retry
-- After analysis: interpret results in plain English and suggest follow-up questions
-- In your Python code, avoid f-strings — use string concatenation (+) or .format() instead
-""",
+    generate_content_config=genai_types.GenerateContentConfig(
+        thinking_config=genai_types.ThinkingConfig(thinking_budget=0),
+    ),
+    instruction=_INSTRUCTION,
     tools=[execute_python],
 )
 
