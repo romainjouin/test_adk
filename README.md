@@ -1,150 +1,217 @@
-# 🎓 Cours ADK — Agent IA connecté à une base de données
+# ADK Course — Multi-Agent Sales Analytics Platform
 
-## ⏱ Durée : 15 minutes
-
----
-
-## 🎬 L'histoire à raconter (pour le prof)
-
-> **"Le data scientist qui parlait à sa base de données"**
->
-> Imaginez : vous êtes data scientist dans une startup e-commerce tech.
-> Chaque matin, le product manager débarque avec ses questions :
->
-> *"C'est quoi notre best-seller ? On a des ruptures de stock ?
->  Y a eu des annulations récemment ?"*
->
-> Vous ouvrez un notebook Jupyter, vous écrivez 3 requêtes SQL,
-> vous formatez les résultats, vous les collez dans Slack…
->
-> Un matin, vous vous dites :
->
-> *"Et si le product manager pouvait poser ses questions en français
->  directement à la base de données ?"*
->
-> Pas en lui donnant accès au SQL (danger !), mais en créant un **agent IA**
-> qui sait quels outils utiliser pour interroger la base de façon **sécurisée**.
->
-> C'est exactement ce qu'on va construire avec **Google ADK** et
-> **MCP Toolbox for Databases** : un agent qui raisonne en langage naturel
-> et exécute des requêtes SQL pré-définies.
+## Duration: 15 minutes
 
 ---
 
-## 🧱 Architecture de la démo
+## The Story (for the instructor)
+
+> **"The data scientist who talked to their database"**
+>
+> You're a data scientist in a tech e-commerce startup.
+> Every morning, the product manager shows up with questions:
+>
+> *"What's our best-seller? Any stockouts? Recent cancellations?"*
+>
+> You open Jupyter, write 3 SQL queries, format the results, paste them in Slack...
+>
+> One morning, you think:
+>
+> *"What if the PM could ask questions in plain language
+>  directly to the database?"*
+>
+> Not by giving them SQL access (danger!), but by building an **AI agent**
+> that knows which tools to use to query the database **securely**.
+>
+> And then you go further: what if we had **4 agents**, each with
+> a different level of power?
+>
+> That's exactly what we build with **Google ADK** — from pre-defined
+> secure tools to an agent that writes its own Python code.
+
+---
+
+## Architecture — 4 Agents, 4 Levels of Power
 
 ```
-┌─────────────────────────┐
-│  Agent ADK (Gemini)     │  ← Raisonne, choisit les outils
-│  (sales_agent/agent.py) │
-└────────┬────────────────┘
-         │ HTTP (localhost:5000)
-┌────────▼────────────────┐
-│  MCP Toolbox Server     │  ← Expose les requêtes SQL comme des "outils"
-│  (tools.yaml)           │     Pas de SQL injection possible
-└────────┬────────────────┘
-         │ SQLite
-┌────────▼────────────────┐
-│  shop.db                │  ← Base locale : 12 produits, 15 commandes
-└─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      Web UI (FastAPI + SSE)                            │
+│                      http://localhost:8080                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────────┐  │
+│  │  Sales   │  │  NL2SQL  │  │  Market  │  │  Code Interpreter   │  │
+│  │ Analyst  │  │          │  │  Intel   │  │                     │  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────────┬──────────┘  │
+└───────┼──────────────┼─────────────┼───────────────────┼─────────────┘
+        │              │             │                   │
+   Toolbox tools   Raw SQL      SQL + Google       execute_python
+   (pre-defined)   (generated)  Search API       (any Python code)
+        │              │             │                   │
+   ┌────▼──────────────▼─────────────▼───────────────────▼──────┐
+   │                        shop.db                             │
+   │  products | customers | orders  (3 years of data)          │
+   └────────────────────────────────────────────────────────────┘
 ```
 
-**Pourquoi cette architecture ?**
-- L'agent n'écrit **jamais** de SQL → pas de risque d'injection
-- Les requêtes sont **pré-définies** dans `tools.yaml` → contrôle total
-- L'agent choisit **quel outil** appeler selon la question → intelligent
-- On peut changer la base (PostgreSQL, BigQuery…) **sans toucher** à l'agent
+### Pedagogical Escalation
+
+| Tab | Agent | Capability | Risk Level |
+|-----|-------|-----------|------------|
+| 1 | **Sales Analyst** | Pre-defined SQL tools via MCP Toolbox | Secure, limited |
+| 2 | **NL2SQL** | AI-generated SQL queries + feature engineering | Flexible SQL |
+| 3 | **Market Intel** | Internal data + live Google Search + charts | Multi-source |
+| 4 | **Code Interpreter** | Writes & runs arbitrary Python code | Ultimate flexibility |
+
+Each tab increases capability AND risk — perfect for teaching trade-offs.
 
 ---
 
-## 📚 Plan du cours
+## The 4 Agents in Detail
 
-| Temps     | Étape                                                      |
-|-----------|-----------------------------------------------------------|
-| 0-3 min   | L'histoire + schéma d'architecture                         |
-| 3-5 min   | Ouvrir `tools.yaml` : les outils SQL pré-définis          |
-| 5-8 min   | Ouvrir `agent.py` : le ToolboxToolset et l'Agent          |
-| 8-12 min  | Démo live : lancer `run_demo.py` (3 questions métier)     |
-| 12-15 min | Bonus : `adk web` + questions du public                   |
+### 1. Sales Analyst (`sales_agent/`)
+
+The **secure** agent. Uses pre-defined SQL tools exposed via MCP Toolbox.
+
+- **Tools**: 7 SQL queries defined in `tools.yaml` (get-sales-by-product, search-products-by-name, etc.)
+- **Architecture**: Agent -> Toolbox HTTP server -> SQLite
+- **Key concept**: The agent never writes SQL — it only calls pre-defined, parameterized queries
+- **Delegation**: Can delegate complex questions to the NL2SQL agent (Agent-as-Tool pattern)
+
+### 2. NL2SQL (`nl2sql_agent/`)
+
+The **flexible SQL** agent. Converts natural language to SQL queries.
+
+- **Tools**: `execute_sql` (runs any SELECT on shop.db) + feature engineering tools
+- **Feature engineering**: Can create local SQLite databases, add columns, insert query results, export to CSV
+- **Key concept**: More powerful than pre-defined tools, but SQL injection risk
+- **Dynamic context**: Knows today's date, product catalog, and DB statistics
+
+### 3. Market Intelligence (`market_agent/`)
+
+The **multi-source** agent. Combines internal data with live web search.
+
+- **Tools**: `execute_sql`, `GoogleSearchAgentTool` (ADK sub-agent), `generate_comparison_chart`
+- **Key concept**: Enriches internal data with external market data
+- **Output**: Generates comparison charts (internal vs. market prices) saved as PNG
+
+### 4. Code Interpreter (`code_agent/`)
+
+The **ultimate flexibility** agent. Writes and executes arbitrary Python code.
+
+- **Tools**: `execute_python` — runs any Python code locally with state persistence
+- **Packages**: pandas, numpy, sklearn, matplotlib, sqlite3
+- **Key concept**: No pre-built tools — the agent creates its own on the fly
+- **Self-healing**: If code fails, reads the error, fixes it, and retries
+- **Wow moment**: Ask "Segment customers by KMeans" and watch it write code, debug itself, and produce a scatter plot
 
 ---
 
-## 🧠 Concepts clés
+## Key ADK Concepts Demonstrated
 
-### Les 3 couches de sécurité
-
-| Couche     | Rôle                                    |
-|-----------|------------------------------------------|
-| **Agent**  | Raisonne, ne voit QUE les descriptions  |
-| **Toolbox**| Exécute des requêtes SQL paramétrées    |
-| **SQLite** | Stocke les données                      |
-
-L'agent ne connaît ni le schéma SQL, ni les tables, ni les colonnes.
-Il voit uniquement les **noms** et **descriptions** des outils.
-
-### Toolbox vs outils custom
-
-| Outils à la main (`def func`)     | MCP Toolbox                        |
-|-----------------------------------|------------------------------------|
-| Vous écrivez du Python             | Vous écrivez du YAML              |
-| Vous gérez la connexion DB         | Toolbox gère tout                 |
-| Risque de SQL injection            | Requêtes paramétrées              |
-| Couplé à votre code                | Découplé (microservice)           |
-| OK pour du prototypage             | Production-ready                  |
+| Concept | Where |
+|---------|-------|
+| **Agent with tools** | Sales Analyst (Toolbox tools) |
+| **MCP Toolbox** | `tools.yaml` — SQL as YAML-declared tools |
+| **Agent-as-Tool** | Sales Analyst delegates to NL2SQL |
+| **Dynamic instructions** | `db_context.py` injects product lists, dates |
+| **Google Search sub-agent** | Market Intel uses `GoogleSearchAgentTool` |
+| **Custom Python tools** | NL2SQL (feature engineering), Code Interpreter (`execute_python`) |
+| **Conversation memory** | Backend tracks exchanges for context continuity |
 
 ---
 
-## 🚀 Lancement rapide
+## Quick Start
 
 ```bash
-# 1. Environnement virtuel
+# 1. Virtual environment
 python3 -m venv .venv && source .venv/bin/activate
 
-# 2. Dépendances
+# 2. Dependencies
 pip install -r requirements.txt
 
-# 3. Clé API Gemini → https://aistudio.google.com/app/apikey
-echo 'GOOGLE_API_KEY="votre-clé"' > sales_agent/.env
+# 3. Gemini API key → https://aistudio.google.com/app/apikey
+#    Copy to each agent directory:
+echo 'GOOGLE_API_KEY="your-key"' > sales_agent/.env
+cp sales_agent/.env nl2sql_agent/.env
+cp sales_agent/.env market_agent/.env
+cp sales_agent/.env code_agent/.env
 
-# 4. Créer la base de données
+# 4. Create the database (3 years of realistic e-commerce data)
 python setup_db.py
 
-# 5. Lancer le serveur Toolbox (dans un terminal séparé)
-./toolbox --config tools.yaml
+# 5. Download MCP Toolbox (for the Sales Analyst agent)
+#    See https://mcp-toolbox.dev/ — place the binary as ./toolbox
 
-# 6. Lancer la démo (dans un autre terminal)
-python run_demo.py
+# 6. Start the Toolbox server (in a separate terminal)
+./toolbox --config tools.yaml --port 5050
 
-# 7. (Bonus) Interface web interactive
-adk web --port 8000
+# 7. Start the web app
+python web_app.py
+#    → Open http://localhost:8080
 ```
 
 ---
 
-## 📁 Structure du projet
+## Project Structure
 
 ```
 test_adk/
-├── README.md          ← Ce fichier (notes du prof)
-├── requirements.txt   ← Dépendances Python
-├── setup_db.py        ← Script de création de la base SQLite
-├── shop.db            ← Base de données (générée par setup_db.py)
-├── tools.yaml         ← Configuration MCP Toolbox (les outils SQL)
-├── toolbox            ← Binaire MCP Toolbox server
-├── run_demo.py        ← Script de démo autonome
-└── sales_agent/       ← Package agent ADK
-    ├── __init__.py
-    ├── .env           ← Clé API Gemini
-    └── agent.py       ← ⭐ Le code de l'agent (15 lignes utiles !)
+├── README.md              ← This file
+├── requirements.txt       ← Python dependencies
+├── setup_db.py            ← Creates shop.db with 3 years of data
+├── db_context.py          ← Dynamic context injection (dates, products)
+├── tools.yaml             ← MCP Toolbox config (7 SQL tools)
+├── web_app.py             ← FastAPI web UI with SSE streaming
+├── run_demo.py            ← CLI demo script (standalone)
+│
+├── sales_agent/           ← Agent 1: Pre-defined tools (secure)
+│   ├── agent.py
+│   └── .env               ← API key (not tracked)
+│
+├── nl2sql_agent/          ← Agent 2: AI-generated SQL (flexible)
+│   ├── agent.py
+│   └── .env
+│
+├── market_agent/          ← Agent 3: DB + Google Search (multi-source)
+│   ├── agent.py
+│   └── .env
+│
+├── code_agent/            ← Agent 4: Python code execution (ultimate)
+│   ├── agent.py
+│   └── .env
+│
+├── ml_agent/              ← Legacy ML agent (replaced by Code Interpreter)
+│   └── agent.py
+│
+├── static/
+│   ├── charts/            ← Generated chart PNGs (not tracked)
+│   └── exports/           ← Generated CSV exports (not tracked)
+│
+├── shop.db                ← SQLite database (generated, not tracked)
+├── toolbox                ← MCP Toolbox binary (downloaded, not tracked)
+└── features/              ← Feature engineering DBs (generated, not tracked)
 ```
 
 ---
 
-## 💡 Pour aller plus loin
+## Suggested Demo Flow (15 min)
 
-- Remplacer SQLite par **PostgreSQL** ou **BigQuery** (changer juste le `source` dans tools.yaml)
-- Ajouter des outils d'**écriture** (UPDATE, INSERT) pour réserver, modifier des commandes
-- Combiner avec des **outils custom** Python (graphiques, exports CSV)
-- **Multi-agents** : un agent "vendeur" + un agent "analyste" qui collaborent
-- **Authentification** : restreindre les données par utilisateur connecté
-- Docs : https://mcp-toolbox.dev/ et https://google.github.io/adk-docs/
+| Time | What to show |
+|------|-------------|
+| 0-2 min | The story + architecture diagram (4 agents, 4 levels) |
+| 2-4 min | Open `tools.yaml` — show pre-defined SQL tools |
+| 4-6 min | Open `sales_agent/agent.py` — show ToolboxToolset + Agent |
+| 6-8 min | **Live demo**: Sales Analyst tab — "What's our best-seller?" |
+| 8-10 min | Switch to NL2SQL tab — "Show revenue by month for 2024" |
+| 10-12 min | Switch to Code Interpreter — "Segment customers with KMeans" |
+| 12-13 min | Watch it write code, hit an error, self-correct, produce a chart |
+| 13-15 min | Recap the 4 levels of capability vs. risk + Q&A |
+
+---
+
+## Going Further
+
+- Replace SQLite with **PostgreSQL** or **BigQuery** (change the `source` in tools.yaml)
+- Add **write tools** (UPDATE, INSERT) for order management
+- Add **authentication** to restrict data per user
+- Deploy with **Cloud Run** or **Vertex AI Agent Builder**
+- Docs: https://google.github.io/adk-docs/ and https://mcp-toolbox.dev/
