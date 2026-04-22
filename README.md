@@ -52,6 +52,52 @@
    └────────────────────────────────────────────────────────────┘
 ```
 
+### Visual Architecture & Tools
+
+```mermaid
+graph TD
+    User([User / Web UI])
+    
+    subgraph "Agents"
+        SalesAnalyst["1. Sales Analyst Agent<br/>(Secure)<br/>- Uses MCP Tools<br/>- Delegates to NL2SQL"]
+        NL2SQL["2. NL2SQL Agent<br/>(Flexible SQL)<br/>- execute_sql<br/>- Feature Engineering<br/>- CSV Export"]
+        MarketIntel["3. Market Intel Agent<br/>(Multi-source)<br/>- execute_sql<br/>- Google Search Agent<br/>- Comparison Charts"]
+        CodeInterpreter["4. Code Interpreter Agent<br/>(Ultimate)<br/>- execute_python<br/>- Self-healing Loop"]
+    end
+
+    User --- SalesAnalyst
+    User --- NL2SQL
+    User --- MarketIntel
+    User --- CodeInterpreter
+
+    subgraph "MCP Server"
+        MCPServer["MCP Toolbox Server<br/>- search-products-by-category<br/>- search-products-by-name<br/>- get-top-products<br/>- get-sales-by-product<br/>- get-recent-orders<br/>- get-low-stock-products<br/>- get-margin-analysis"]
+    end
+
+    SalesAnalyst --> MCPServer
+
+    subgraph "Data Sources & Runtimes"
+        ShopDB[(shop.db)]
+        
+        T_Products["products<br/>- id, name, category<br/>- price, cost, stock, rating"]
+        T_Customers["customers<br/>- id, name, city<br/>- signup_date"]
+        T_Orders["orders<br/>- id, product_id, quantity<br/>- total_price, customer<br/>- order_date, status"]
+        
+        ShopDB --> T_Products
+        ShopDB --> T_Customers
+        ShopDB --> T_Orders
+
+        Web((Live Web))
+        PythonEnv[Python Runtime]
+    end
+
+    MCPServer --> ShopDB
+    NL2SQL --> ShopDB
+    MarketIntel --> ShopDB
+    MarketIntel --> Web
+    CodeInterpreter --> PythonEnv
+```
+
 ### Pedagogical Escalation
 
 | Tab | Agent | Capability | Risk Level |
@@ -102,6 +148,40 @@ The **ultimate flexibility** agent. Writes and executes arbitrary Python code.
 - **Key concept**: No pre-built tools — the agent creates its own on the fly
 - **Self-healing**: If code fails, reads the error, fixes it, and retries
 - **Wow moment**: Ask "Segment customers by KMeans" and watch it write code, debug itself, and produce a scatter plot
+
+---
+
+## MCP Toolbox Tools in Detail (`tools.yaml`)
+
+The Sales Analyst agent uses the following pre-defined SQL tools managed by the MCP Toolbox:
+
+1. **`search-products-by-category`**
+   - **Description**: Searches all products in a given category. Case and accent insensitive.
+   - **Parameters**: `category` (string).
+
+2. **`search-products-by-name`**
+   - **Description**: Searches products whose name or category contains a keyword. Case and accent insensitive.
+   - **Parameters**: `keyword` (string).
+
+3. **`get-top-products`**
+   - **Description**: Returns the top-rated products.
+   - **Parameters**: `limit` (integer).
+
+4. **`get-sales-by-product`**
+   - **Description**: Returns a sales summary for each product (order count, quantity sold, revenue, profit).
+   - **Parameters**: None.
+
+5. **`get-recent-orders`**
+   - **Description**: Returns the N most recent orders with details.
+   - **Parameters**: `limit` (integer).
+
+6. **`get-low-stock-products`**
+   - **Description**: Returns products with stock at or below a given threshold.
+   - **Parameters**: `threshold` (integer).
+
+7. **`get-margin-analysis`**
+   - **Description**: Profitability analysis by product (price, cost, margin, stock value).
+   - **Parameters**: None.
 
 ---
 
